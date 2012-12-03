@@ -32,6 +32,24 @@ struct COMPSIGSIDS
 	}
 };
 
+void Output(std::vector<SigSids> &result)
+{
+	std::ofstream fout("C:\\test\\Signatures.txt");
+	struct COMP
+	{
+		BOOL operator()(SigSids &a, SigSids &b)
+		{
+			return a.Sig < b.Sig;
+		}
+	};
+	sort(result.begin(), result.end(), COMP());
+	for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
+	{
+		fout << i->Sig << std::endl;
+	}
+	fout.close();
+}
+
 void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 {
 	std::vector<SigSids> result;
@@ -75,6 +93,7 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 	}
 	foutRules.close();
 	foutNoRules.close();
+	Output(result);
 }
 void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap);
 void DeleteEdges(SIGNATUREMAP &results, SIDMAP &dmap)
