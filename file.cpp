@@ -34,7 +34,6 @@ struct COMPSIGSIDS
 
 void Output(std::vector<SigSids> &result)
 {
-	std::ofstream fout("C:\\test\\Signatures.txt");
 	struct COMP
 	{
 		BOOL operator()(SigSids &a, SigSids &b)
@@ -43,9 +42,12 @@ void Output(std::vector<SigSids> &result)
 		}
 	};
 	sort(result.begin(), result.end(), COMP());
+	std::ofstream fout("C:\\test\\Signatures.txt", std::ios::binary);
+	size_t nCnt = result.size();
+	fout.write((char*)&nCnt, 4);
 	for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
 	{
-		fout << i->Sig << std::endl;
+		fout.write((char*)&(i->Sig), 4);
 	}
 	fout.close();
 }
@@ -70,12 +72,10 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 
 	sort(result.begin(), result.end(), COMPSIGSIDS());
 	std::ofstream foutRules("C:\\test\\ResultsWithRules.txt");
-	std::ofstream foutNoRules("C:\\test\\ResultsWithoutRules.txt");
 	std::string strSid;
 	for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
 	{
 		foutRules << (i->nSids).size() << std::endl;
-		foutNoRules << (i->nSids).size() << std::endl;
 		for (std::vector<SNORTID>::iterator j = (i->nSids).begin(); j != (i->nSids).end(); ++j)
 		{
 			std::stringstream ss;
@@ -92,6 +92,11 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 		}
 	}
 	foutRules.close();
+	std::ofstream foutNoRules("C:\\test\\ResultsWithoutRules.txt");
+	for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
+	{
+		foutNoRules << (i->nSids).size() << std::endl;
+	}
 	foutNoRules.close();
 	Output(result);
 }
