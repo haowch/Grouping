@@ -73,18 +73,6 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 	sort(result.begin(), result.end(), COMPSIGSIDS());
 	std::ofstream foutRules("C:\\test\\ResultsWithRules.txt");
 	std::string strSid;
-	//for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
-	//{
-	//	foutRules << (i->nSids).size() << " ";
-	//	for (std::vector<SNORTID>::iterator j = (i->nSids).begin(); j != (i->nSids).end(); ++j)
-	//	{
-	//		std::stringstream ss;
-	//		ss << (*j);
-	//		strSid = ss.str();
-	//		foutRules << strSid << " ";
-	//	}
-	//	foutRules << std::endl;
-	//}
 	for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
 	{
 		foutRules << (i->nSids).size() << std::endl;
@@ -113,7 +101,7 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 	Output(result);
 }
 void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap);
-void DeleteEdges(SIGNATUREMAP &gmap, SIGNATUREMAP &results, SIDMAP &dmap)
+void Optimize(SIGNATUREMAP &gmap, SIGNATUREMAP &results, SIDMAP &dmap)
 {
 	std::set<SNORTID> Sids;
 	for (SIDMAP::iterator i = dmap.begin(); i != dmap.end(); ++i)
@@ -275,9 +263,9 @@ void main()
 	std::cout << "Generate Sid map complete!" << std::endl;
 
 	SIGNATUREMAP results;
-	DeleteEdges(gmap, results, dmap);
+	Optimize(gmap, results, dmap);
 
-	std::cout << "DeleteEdges complete!" << std::endl;
+	std::cout << "Optimize complete!" << std::endl;
 
 	Output(results, rules);
 
