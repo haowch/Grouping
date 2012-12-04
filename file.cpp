@@ -101,18 +101,28 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 	Output(result);
 }
 void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap);
-void DeleteEdges(SIGNATUREMAP &results, SIDMAP &dmap)
+void DeleteEdges(SIGNATUREMAP &gmap, SIGNATUREMAP &results, SIDMAP &dmap)
 {
-	size_t min;
+	size_t min_first;
+	size_t min_second;
 	SIGNATURE sig;
 	for (SIDMAP::iterator i = dmap.begin(); i != dmap.end(); ++i)
 	{
-		min = dmap.size() + 1;
+		min_first = dmap.size() + 1;
 		for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
 		{
-			if (min > results[(*j)].size())
+			if (min_first > results[(*j)].size())
 			{
-				min = results[(*j)].size();
+				min_first = results[(*j)].size();
+				sig = (*j);
+			}
+		}
+		min_second = dmap.size() + 1;
+		for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
+		{
+			if (min_first == results[(*j)].size() && min_second > gmap[(*j)].size())
+			{
+				min_second = gmap[(*j)].size();
 				sig = (*j);
 			}
 		}
@@ -208,6 +218,7 @@ void main()
 
 	std::cout << "GenerateEdges complete!" << std::endl;
 
+	SIGNATUREMAP gmap;
 	SIGNATUREMAP results;
 	for (std::vector<EDGE>::iterator i = edges.begin(); i != edges.end(); ++i)
 	{
@@ -224,7 +235,7 @@ void main()
 
 	std::cout << "Generate Sid map complete!" << std::endl;
 
-	DeleteEdges(results, dmap);
+	DeleteEdges(gmap, results, dmap);
 
 	std::cout << "DeleteEdges complete!" << std::endl;
 
