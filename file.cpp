@@ -73,6 +73,18 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 	sort(result.begin(), result.end(), COMPSIGSIDS());
 	std::ofstream foutRules("C:\\test\\ResultsWithRules.txt");
 	std::string strSid;
+	//for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
+	//{
+	//	foutRules << (i->nSids).size() << " ";
+	//	for (std::vector<SNORTID>::iterator j = (i->nSids).begin(); j != (i->nSids).end(); ++j)
+	//	{
+	//		std::stringstream ss;
+	//		ss << (*j);
+	//		strSid = ss.str();
+	//		foutRules << strSid << " ";
+	//	}
+	//	foutRules << std::endl;
+	//}
 	for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
 	{
 		foutRules << (i->nSids).size() << std::endl;
@@ -101,27 +113,23 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 	Output(result);
 }
 void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap);
-void DeleteEdges(SIGNATUREMAP &results, SIDMAP &dmap)
+void DeleteEdges(SIGNATUREMAP &gmap, SIGNATUREMAP &results, SIDMAP &dmap)
 {
-	size_t min;
-	SIGNATURE sig;
+	std::set<SNORTID> Sids;
 	for (SIDMAP::iterator i = dmap.begin(); i != dmap.end(); ++i)
 	{
-		min = dmap.size() + 1;
-		for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
+		if ((i->second).size() == 1)
 		{
-			if (min > results[(*j)].size())
-			{
-				min = results[(*j)].size();
-				sig = (*j);
-			}
+			results[*((i->second).begin())].insert(i->first);
+			Sids.insert(i->first);
 		}
-		for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
+	}
+	for (SIGNATUREMAP::iterator i = gmap.begin(); i != gmap.end(); ++i)
+	{
+		if ((i->second).size() == 1 && !Sids.count(*(i->second.begin())))
 		{
-			if (sig != (*j))
-			{
-				results[*j].erase(i->first);
-			}
+			results[i->first].insert(*((i->second).begin()));
+			Sids.insert(*((i->second).begin()));
 		}
 	}
 	OptimizeMapping(results, dmap);
@@ -250,10 +258,10 @@ void main()
 
 	std::cout << "GenerateEdges complete!" << std::endl;
 
-	SIGNATUREMAP results;
+	SIGNATUREMAP gmap;
 	for (std::vector<EDGE>::iterator i = edges.begin(); i != edges.end(); ++i)
 	{
-		results[i->Sig].insert(i->nSid);
+		gmap[i->Sig].insert(i->nSid);
 	}
 
 	std::cout << "Generate Signature map complete!" << std::endl;
@@ -266,7 +274,8 @@ void main()
 
 	std::cout << "Generate Sid map complete!" << std::endl;
 
-	DeleteEdges(results, dmap);
+	SIGNATUREMAP results;
+	DeleteEdges(gmap, results, dmap);
 
 	std::cout << "DeleteEdges complete!" << std::endl;
 
