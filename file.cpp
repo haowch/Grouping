@@ -101,28 +101,18 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 	Output(result);
 }
 void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap);
-void DeleteEdges(SIGNATUREMAP &gmap, SIGNATUREMAP &results, SIDMAP &dmap)
+void DeleteEdges(SIGNATUREMAP &results, SIDMAP &dmap)
 {
-	size_t min_first;
-	size_t min_second;
+	size_t min;
 	SIGNATURE sig;
 	for (SIDMAP::iterator i = dmap.begin(); i != dmap.end(); ++i)
 	{
-		min_first = dmap.size() + 1;
+		min = dmap.size() + 1;
 		for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
 		{
-			if (min_first > results[(*j)].size())
+			if (min > results[(*j)].size())
 			{
-				min_first = results[(*j)].size();
-				sig = (*j);
-			}
-		}
-		min_second = dmap.size() + 1;
-		for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
-		{
-			if (min_first == results[(*j)].size() && min_second > gmap[(*j)].size())
-			{
-				min_second = gmap[(*j)].size();
+				min = results[(*j)].size();
 				sig = (*j);
 			}
 		}
@@ -144,6 +134,11 @@ void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap)
 	SIGNATURE original_sig;
 	bool flag = true;
 	int count = 0;
+	size_t second_min;
+	SIGNATURE second_sig;
+	SIGNATURE third_sig;
+	SNORTID Sid;
+	bool change;
 	while(flag)
 	{
 		++count;
@@ -175,6 +170,43 @@ void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap)
 				results[sig].insert(i->first);
 				flag = true;
 				//break;
+			}
+			else if (min + 1 == original_num)
+			{
+				second_min = min;
+				change = false;
+				for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
+				{
+					if (min == results[*j].size())
+					{
+						for (std::set<SNORTID>::iterator k = results[*j].begin(); k != results[*j].end(); ++k)
+						{
+							for (std::set<SIGNATURE>::iterator l = dmap[*k].begin(); l != dmap[*k].end(); ++l)
+							{
+								if (results[*l].size() < second_min)
+								{
+									second_min = results[*l].size();
+									second_sig = *j;
+									third_sig = *l;
+									Sid = *k;
+									change = true;
+								}
+							}
+						}
+					}
+				}
+				if (change)
+				{
+					results[sig].insert(i->first);
+					results[original_sig].erase(i->first);
+					results[second_sig].erase(Sid);
+					results[third_sig].insert(Sid);
+					flag = true;
+				}
+			}
+			else
+			{
+				continue;
 			}
 		}
 	}
@@ -218,7 +250,6 @@ void main()
 
 	std::cout << "GenerateEdges complete!" << std::endl;
 
-	SIGNATUREMAP gmap;
 	SIGNATUREMAP results;
 	for (std::vector<EDGE>::iterator i = edges.begin(); i != edges.end(); ++i)
 	{
@@ -235,7 +266,7 @@ void main()
 
 	std::cout << "Generate Sid map complete!" << std::endl;
 
-	DeleteEdges(gmap, results, dmap);
+	DeleteEdges(results, dmap);
 
 	std::cout << "DeleteEdges complete!" << std::endl;
 
