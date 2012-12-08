@@ -42,14 +42,41 @@ void Output(std::vector<SigSids> &result)
 		}
 	};
 	sort(result.begin(), result.end(), COMP());
-	std::ofstream fout("C:\\test\\Signatures.txt", std::ios::binary);
-	size_t nCnt = result.size();
-	fout.write((char*)&nCnt, 4);
+	//std::ofstream fout("C:\\test\\Signatures.txt", std::ios::binary);
+	//size_t nCnt = result.size();
+	//fout.write((char*)&nCnt, 4);
+	//for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
+	//{
+	//	fout.write((char*)&(i->Sig), 4);
+	//}
+	//fout.close();
+	std::ofstream fout("C:\\test\\Signatures.txt");
 	for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
 	{
-		fout.write((char*)&(i->Sig), 4);
+		fout << i->Sig << std::endl;
 	}
 	fout.close();
+}
+
+unsigned int Hash(unsigned int &value)
+{
+	//char *p = (char*)&value;
+	//char sz[4] = {0};
+	//for (int i = 0; i < 4; ++i)
+	//{
+	//	sz[i] = ((p[i] & 0x0F) << 4) | ((p[i] & 0xF0) >> 4);
+	//}
+	//return (*(unsigned int*)sz) % 39989;
+	//if (value < 979924071)
+	//{
+	//	return value % 19993;
+	//}
+	//else
+	//{
+	//	return 19997 + value % 19993;
+	//}
+
+	return value % 39953;
 }
 
 void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
@@ -71,36 +98,61 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 	}
 
 	sort(result.begin(), result.end(), COMPSIGSIDS());
-	std::ofstream foutRules("C:\\test\\ResultsWithRules.txt");
-	std::string strSid;
-	for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
-	{
-		foutRules << (i->nSids).size() << std::endl;
-		for (std::vector<SNORTID>::iterator j = (i->nSids).begin(); j != (i->nSids).end(); ++j)
-		{
-			std::stringstream ss;
-			ss << (*j);
-			strSid = "sid:" + ss.str() + ";";
-			for (std::vector<std::string>::iterator k = rules.begin(); k !=rules.end(); ++k)
-			{
-				if (k->find(strSid) != -1)
-				{
-					foutRules << (*k) << std::endl;
-					break;
-				}
-			}
-		}
-	}
-	foutRules.close();
+	//std::ofstream foutRules("C:\\test\\ResultsWithRules.txt");
+	//std::string strSid;
+	//for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
+	//{
+	//	foutRules << (i->nSids).size() << std::endl;
+	//	for (std::vector<SNORTID>::iterator j = (i->nSids).begin(); j != (i->nSids).end(); ++j)
+	//	{
+	//		std::stringstream ss;
+	//		ss << (*j);
+	//		strSid = "sid:" + ss.str() + ";";
+	//		for (std::vector<std::string>::iterator k = rules.begin(); k !=rules.end(); ++k)
+	//		{
+	//			if (k->find(strSid) != -1)
+	//			{
+	//				foutRules << (*k) << std::endl;
+	//				break;
+	//			}
+	//		}
+	//	}
+	//}
+	//foutRules.close();
 	std::ofstream foutNoRules("C:\\test\\ResultsWithoutRules.txt");
+	std::set<unsigned int> tmp;
+	struct COMP
+	{
+		BOOL operator()(SigSids &a, SigSids &b)
+		{
+			return a.Sig < b.Sig;
+		}
+	};
+	sort(result.begin(), result.end(), COMP());
+	int count = 0;
 	for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
 	{
-		foutNoRules << (i->nSids).size() << std::endl;
+		if (tmp.count(Hash(i->Sig)))
+		{
+			++count;
+			std::cout << i->Sig << std::endl;
+		}
+		tmp.insert(Hash(i->Sig));
+		foutNoRules << i->Sig << "\t" << i->nSids.size() << "\t";
+		for (std::vector<SNORTID>::iterator j = i->nSids.begin(); j != i->nSids.end(); ++j)
+		{
+			foutNoRules << *j << " ";
+		}
+		foutNoRules << "\t" << Hash(i->Sig) << std::endl;
+		//foutNoRules << i->nSids.size() << std::endl;
 	}
+	std::cout << count << std::endl;
+	std::cout << tmp.size() << std::endl;
 	foutNoRules.close();
 	Output(result);
 }
 void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap);
+void Adjust(SIGNATUREMAP &results, SIDMAP &dmap);
 void Optimize(SIGNATUREMAP &gmap, SIGNATUREMAP &results, SIDMAP &dmap)
 {
 	std::set<SNORTID> Sids;
@@ -121,7 +173,54 @@ void Optimize(SIGNATUREMAP &gmap, SIGNATUREMAP &results, SIDMAP &dmap)
 		}
 	}
 	OptimizeMapping(results, dmap);
+	Adjust(results, dmap);
 }
+
+void Adjust(SIGNATUREMAP &results, SIDMAP &dmap)
+{
+	std::set<unsigned int> tmp;
+	std::set<SIGNATURE>::iterator k;
+	bool flag = true;
+	while (flag)
+	{
+		flag = false;
+		for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
+		{
+			if (i->second.size() > 0)
+			{
+				if (tmp.count(Hash((unsigned int)i->first)))
+				{
+					for (std::set<SNORTID>::iterator j = i->second.begin(); j != i->second.end();)
+					{
+						for (k = dmap[*j].begin(); k != dmap[*j].end(); ++k)
+						{
+							if (!tmp.count(Hash((unsigned int)(*k))) && results[*k].size() == 0)
+							{
+								tmp.insert(Hash((unsigned int)(*k)));
+								results[*k].insert(*j);
+								flag = true;
+								break;
+							}
+						}
+						if (k == dmap[*j].end())
+						{
+							break;
+						}
+						else
+						{
+							j = i->second.erase(j);
+						}
+					}
+				}
+				else
+				{
+					tmp.insert(Hash((unsigned int)i->first));
+				}
+			}
+		}
+	}
+}
+
 void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap)
 {
 	size_t min;
