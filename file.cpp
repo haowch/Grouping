@@ -181,12 +181,19 @@ void Adjust(SIGNATUREMAP &results, SIDMAP &dmap)
 	std::set<unsigned int> tmp;
 	std::set<SIGNATURE>::iterator k;
 	bool flag = true;
+	for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
+	{
+		if (i->second.size() > 1)
+		{
+			tmp.insert(Hash((unsigned int)i->first));
+		}
+	}
 	while (flag)
 	{
 		flag = false;
 		for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
 		{
-			if (i->second.size() > 0)
+			if (i->second.size() == 1)
 			{
 				if (tmp.count(Hash((unsigned int)i->first)))
 				{
