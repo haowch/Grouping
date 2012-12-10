@@ -42,40 +42,24 @@ void Output(std::vector<SigSids> &result)
 		}
 	};
 	sort(result.begin(), result.end(), COMP());
-	//std::ofstream fout("C:\\test\\Signatures.txt", std::ios::binary);
-	//size_t nCnt = result.size();
-	//fout.write((char*)&nCnt, 4);
-	//for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
-	//{
-	//	fout.write((char*)&(i->Sig), 4);
-	//}
-	//fout.close();
-	std::ofstream fout("C:\\test\\Signatures.txt");
+	std::ofstream fout("C:\\test\\Signatures.txt", std::ios::binary);
+	size_t nCnt = result.size();
+	fout.write((char*)&nCnt, 4);
 	for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
 	{
-		fout << i->Sig << std::endl;
+		fout.write((char*)&(i->Sig), 4);
 	}
 	fout.close();
+	//std::ofstream fout("C:\\test\\Signatures.txt");
+	//for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
+	//{
+	//	fout << i->Sig << std::endl;
+	//}
+	//fout.close();
 }
 
 unsigned int Hash(unsigned int &value)
 {
-	//char *p = (char*)&value;
-	//char sz[4] = {0};
-	//for (int i = 0; i < 4; ++i)
-	//{
-	//	sz[i] = ((p[i] & 0x0F) << 4) | ((p[i] & 0xF0) >> 4);
-	//}
-	//return (*(unsigned int*)sz) % 39989;
-	//if (value < 979924071)
-	//{
-	//	return value % 19993;
-	//}
-	//else
-	//{
-	//	return 19997 + value % 19993;
-	//}
-
 	return value % 39953;
 }
 
@@ -98,27 +82,27 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 	}
 
 	sort(result.begin(), result.end(), COMPSIGSIDS());
-	//std::ofstream foutRules("C:\\test\\ResultsWithRules.txt");
-	//std::string strSid;
-	//for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
-	//{
-	//	foutRules << (i->nSids).size() << std::endl;
-	//	for (std::vector<SNORTID>::iterator j = (i->nSids).begin(); j != (i->nSids).end(); ++j)
-	//	{
-	//		std::stringstream ss;
-	//		ss << (*j);
-	//		strSid = "sid:" + ss.str() + ";";
-	//		for (std::vector<std::string>::iterator k = rules.begin(); k !=rules.end(); ++k)
-	//		{
-	//			if (k->find(strSid) != -1)
-	//			{
-	//				foutRules << (*k) << std::endl;
-	//				break;
-	//			}
-	//		}
-	//	}
-	//}
-	//foutRules.close();
+	std::ofstream foutRules("C:\\test\\ResultsWithRules.txt");
+	std::string strSid;
+	for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
+	{
+		foutRules << (i->nSids).size() << std::endl;
+		for (std::vector<SNORTID>::iterator j = (i->nSids).begin(); j != (i->nSids).end(); ++j)
+		{
+			std::stringstream ss;
+			ss << (*j);
+			strSid = "sid:" + ss.str() + ";";
+			for (std::vector<std::string>::iterator k = rules.begin(); k !=rules.end(); ++k)
+			{
+				if (k->find(strSid) != -1)
+				{
+					foutRules << (*k) << std::endl;
+					break;
+				}
+			}
+		}
+	}
+	foutRules.close();
 	std::ofstream foutNoRules("C:\\test\\ResultsWithoutRules.txt");
 	std::set<unsigned int> tmp;
 	struct COMP
@@ -144,7 +128,6 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 			foutNoRules << *j << " ";
 		}
 		foutNoRules << "\t" << Hash(i->Sig) << std::endl;
-		//foutNoRules << i->nSids.size() << std::endl;
 	}
 	std::cout << count << std::endl;
 	std::cout << tmp.size() << std::endl;
@@ -152,7 +135,6 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 	Output(result);
 }
 void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap);
-void Adjust(SIGNATUREMAP &results, SIDMAP &dmap);
 void Optimize(SIGNATUREMAP &gmap, SIGNATUREMAP &results, SIDMAP &dmap)
 {
 	std::set<SNORTID> Sids;
@@ -173,60 +155,210 @@ void Optimize(SIGNATUREMAP &gmap, SIGNATUREMAP &results, SIDMAP &dmap)
 		}
 	}
 	OptimizeMapping(results, dmap);
-	Adjust(results, dmap);
 }
+
+typedef std::set<unsigned int> SIGSET;
+struct Path
+{
+	SIGNATURE parent;
+	SIGNATURE self;
+	size_t position;
+};
+bool myFind(std::map<unsigned int, SIGSET> &mapHashSigSet, SIDMAP &sidMap, SIGNATUREMAP &results, std::vector<SIGNATURE> &SigSet, size_t nDepth, std::vector<Path> &vecPath);
 
 void Adjust(SIGNATUREMAP &results, SIDMAP &dmap)
 {
-	std::set<unsigned int> tmp;
-	std::set<SIGNATURE>::iterator k;
-	bool flag = true;
+	std::map<unsigned int, SIGSET> mapHashSigSet;
 	for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
 	{
-		if (i->second.size() > 1)
+		if (i->second.size() >= 1)
 		{
-			tmp.insert(Hash((unsigned int)i->first));
+			mapHashSigSet[Hash((unsigned int)i->first)].insert(i->first);
 		}
 	}
-	while (flag)
+	for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
 	{
-		flag = false;
-		for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
+		unsigned int iHashValue = Hash((unsigned int)i->first);
+		SIGSET &iset = mapHashSigSet[iHashValue];
+		size_t count = iset.size();
+		if (i->second.size() == 1 && count >= 2)
 		{
-			if (i->second.size() == 1)
+			for (std::set<SNORTID>::iterator j = i->second.begin(); j != i->second.end();)
 			{
-				if (tmp.count(Hash((unsigned int)i->first)))
+				std::set<SNORTID>::iterator k = dmap[*j].begin();
+				for (; k != dmap[*j].end(); ++k)
 				{
-					for (std::set<SNORTID>::iterator j = i->second.begin(); j != i->second.end();)
+					unsigned int kHashValue = Hash((unsigned int)(*k));
+					SIGSET &kset = mapHashSigSet[kHashValue];
+					if (results[*k].size() == 0 && kset.size() + 1 < count)
 					{
-						for (k = dmap[*j].begin(); k != dmap[*j].end(); ++k)
-						{
-							if (!tmp.count(Hash((unsigned int)(*k))) && results[*k].size() == 0)
-							{
-								tmp.insert(Hash((unsigned int)(*k)));
-								results[*k].insert(*j);
-								flag = true;
-								break;
-							}
-						}
-						if (k == dmap[*j].end())
-						{
-							break;
-						}
-						else
-						{
-							j = i->second.erase(j);
-						}
+						kset.insert(*k);
+						iset.erase(i->first);
+						results[*k].insert(*j);
+						break;
 					}
+				}
+				if (k == dmap[*j].end())
+				{
+					break;
 				}
 				else
 				{
-					tmp.insert(Hash((unsigned int)i->first));
+					j = i->second.erase(j);
 				}
 			}
 		}
 	}
+	for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
+	{
+		unsigned int iHashValue = Hash((unsigned int)i->first);
+		SIGSET &iset = mapHashSigSet[iHashValue];
+		size_t count = iset.size();
+		if (i->second.size() == 1 && count >= 2)
+		{
+			std::vector<SIGNATURE> Sigs;
+			std::vector<Path> vecPath;
+			SIGNATURE oneSig;
+			oneSig = i->first;
+			Sigs.push_back(oneSig);
+			if (myFind(mapHashSigSet, dmap, results, Sigs, 1, vecPath))
+			{
+				Path onePoint;
+				onePoint.parent = vecPath[vecPath.size() - 1].parent;
+				onePoint.self = vecPath[vecPath.size() - 1].self;
+				onePoint.position = vecPath[vecPath.size() - 1].position;
+				SNORTID oneSid;
+				while (onePoint.position != 0)
+				{
+					oneSid = *(results[onePoint.parent].begin());
+					results[onePoint.self].insert(oneSid);
+					results[onePoint.parent].erase(oneSid);
+					for (std::vector<Path>::iterator j = vecPath.begin(); j != vecPath.end(); ++j)
+					{
+						if (j->position + 1 == onePoint.position && j->self == onePoint.parent)
+						{
+							onePoint.parent = j->parent;
+							onePoint.self = j->self;
+							onePoint.position = j->position;
+							break;
+						}
+					}
+				}
+				oneSid = *(results[onePoint.parent].begin());
+				results[onePoint.self].insert(oneSid);
+				results[onePoint.parent].erase(oneSid);
+			}
+		}
+	}
 }
+
+bool myFind(std::map<unsigned int, SIGSET> &mapHashSigSet, SIDMAP &sidMap, SIGNATUREMAP &results, std::vector<SIGNATURE> &Sigs, size_t nDepth, std::vector<Path> &vecPath)
+{
+	if (nDepth > 5 || Sigs.empty())
+	{
+		return false;
+	}
+	bool flag = false;
+	std::vector<SIGNATURE> nextSigs;
+	Path onePoint;
+	for (std::vector<SIGNATURE>::iterator i = Sigs.begin(); i != Sigs.end(); ++i)
+	{
+		onePoint.parent = *i;
+		if (vecPath.size() == 0)
+		{
+			onePoint.position = 0;
+		}
+		else
+		{
+			onePoint.position = vecPath[vecPath.size() - 1].position + 1;
+		}
+		SIGSET &iset = mapHashSigSet[Hash((unsigned int)*i)];
+		size_t count = iset.size();
+		if (results[*i].size() == 1)
+		{
+			SNORTID sid = *(results[*i].begin());
+			for (std::set<SNORTID>::iterator k = sidMap[sid].begin(); k != sidMap[sid].end(); ++k)
+			{
+				SIGSET &kset = mapHashSigSet[Hash((unsigned int)(*k))];
+				if (kset.size() + 1 == count)
+				{
+					nextSigs.push_back(*k);
+					onePoint.self = *k;
+					vecPath.push_back(onePoint);
+					if (results[*k].size() == 0)
+					{
+						flag = true;
+						break;
+					}
+				}
+			}
+			if (flag)
+			{
+				break;
+			}
+		}
+	}
+	if (flag)
+	{
+		return true;
+	}
+	else
+	{
+		return myFind(mapHashSigSet, sidMap, results, nextSigs, nDepth + 1, vecPath);
+	}
+}
+
+//void Adjust(SIGNATUREMAP &results, SIDMAP &dmap)
+//{
+//	std::set<unsigned int> tmp;
+//	std::set<SIGNATURE>::iterator k;
+//	bool flag = true;
+//	for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
+//	{
+//		if (i->second.size() > 1)
+//		{
+//			tmp.insert(Hash((unsigned int)i->first));
+//		}
+//	}
+//	while (flag)
+//	{
+//		flag = false;
+//		for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
+//		{
+//			if (i->second.size() == 1)
+//			{
+//				if (tmp.count(Hash((unsigned int)i->first)))
+//				{
+//					for (std::set<SNORTID>::iterator j = i->second.begin(); j != i->second.end();)
+//					{
+//						for (k = dmap[*j].begin(); k != dmap[*j].end(); ++k)
+//						{
+//							if (!tmp.count(Hash((unsigned int)(*k))) && results[*k].size() == 0)
+//							{
+//								tmp.insert(Hash((unsigned int)(*k)));
+//								results[*k].insert(*j);
+//								flag = true;
+//								break;
+//							}
+//						}
+//						if (k == dmap[*j].end())
+//						{
+//							break;
+//						}
+//						else
+//						{
+//							j = i->second.erase(j);
+//						}
+//					}
+//				}
+//				else
+//				{
+//					tmp.insert(Hash((unsigned int)i->first));
+//				}
+//			}
+//		}
+//	}
+//}
 
 void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap)
 {
@@ -263,7 +395,7 @@ void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap)
 					original_sig = (*j);
 				}
 			}
-			if (min + 1 < original_num)
+			if (original_num >= 2 && min + 1 < original_num)
 			{
 				if (original_num != dmap.size() + 1)
 				{
@@ -273,7 +405,7 @@ void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap)
 				flag = true;
 				//break;
 			}
-			else if (min + 1 == original_num)
+			else if (original_num >= 2 && min + 1 == original_num)
 			{
 				second_min = min;
 				change = false;
@@ -372,6 +504,10 @@ void main()
 	Optimize(gmap, results, dmap);
 
 	std::cout << "Optimize complete!" << std::endl;
+
+	Adjust(results, dmap);
+
+	std::cout << "Adjust complete!" << std::endl;
 
 	Output(results, rules);
 
