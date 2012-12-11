@@ -129,8 +129,9 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 		}
 		foutNoRules << "\t" << Hash(i->Sig) << std::endl;
 	}
-	std::cout << count << std::endl;
-	std::cout << tmp.size() << std::endl;
+	std::cout << "Number of Signatures that have conflict with others:" << count << std::endl;
+	std::cout << "Total number of Signatures:" << tmp.size() << std::endl;
+	std::cout << "Conflict rate:" << count / (tmp.size() + 0.0) * 100 << "%" << std::endl;
 	foutNoRules.close();
 	Output(result);
 }
@@ -261,17 +262,17 @@ bool myFind(std::map<unsigned int, SIGSET> &mapHashSigSet, SIDMAP &sidMap, SIGNA
 	bool flag = false;
 	std::vector<SIGNATURE> nextSigs;
 	Path onePoint;
+	if (vecPath.size() == 0)
+	{
+		onePoint.position = 0;
+	}
+	else
+	{
+		onePoint.position = vecPath[vecPath.size() - 1].position + 1;
+	}
 	for (std::vector<SIGNATURE>::iterator i = Sigs.begin(); i != Sigs.end(); ++i)
 	{
 		onePoint.parent = *i;
-		if (vecPath.size() == 0)
-		{
-			onePoint.position = 0;
-		}
-		else
-		{
-			onePoint.position = vecPath[vecPath.size() - 1].position + 1;
-		}
 		SIGSET &iset = mapHashSigSet[Hash((unsigned int)*i)];
 		size_t count = iset.size();
 		if (results[*i].size() == 1)
