@@ -1,4 +1,3 @@
-
 #include "stdafx.h"
 
 #ifndef SIGNATURE
@@ -50,19 +49,11 @@ void Output(std::vector<SigSids> &result)
 		fout.write((char*)&(i->Sig), 4);
 	}
 	fout.close();
-	//std::ofstream fout("C:\\test\\Signatures.txt");
-	//for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
-	//{
-	//	fout << i->Sig << std::endl;
-	//}
-	//fout.close();
 }
 
 unsigned int Hash(SIGNATURE &value)
 {
 	return value % 39953;
-	//return value % 15991; //0.3%
-	//return value % 34981; //0%
 }
 
 void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
@@ -97,12 +88,6 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 	for (std::vector<SigSids>::iterator i = result.begin(); i != result.end(); ++i)
 	{
 		tmp[Hash(i->Sig)].insert(i->Sig);
-		//for (size_t j = 0; j < 4; ++j)
-		//{
-		//	foutNoRules << ((unsigned char*)&(i->Sig))[j];
-		//}
-		//foutNoRules << "\t";
-		//foutNoRules << i->nSids.size() << "\t";
 		foutNoRules << i->Sig << "\t" << i->nSids.size() << "\t";
 		for (std::vector<SNORTID>::iterator j = i->nSids.begin(); j != i->nSids.end(); ++j)
 		{
@@ -125,142 +110,55 @@ void Output(SIGNATUREMAP &results, std::vector<std::string> &rules)
 	std::cout << "Conflict rate:" << count / (result.size() + 0.0) * 100 << "%" << std::endl;
 	Output(result);
 }
-void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap);
-void Optimize(SIGNATUREMAP &gmap, SIGNATUREMAP &results, SIDMAP &dmap)
-{
-	std::set<SNORTID> Sids;
-	for (SIDMAP::iterator i = dmap.begin(); i != dmap.end(); ++i)
-	{
-		if ((i->second).size() == 1)
-		{
-			results[*((i->second).begin())].insert(i->first);
-			Sids.insert(i->first);
-		}
-	}
-	for (SIGNATUREMAP::iterator i = gmap.begin(); i != gmap.end(); ++i)
-	{
-		if ((i->second).size() == 1 && !Sids.count(*(i->second.begin())))
-		{
-			results[i->first].insert(*((i->second).begin()));
-			Sids.insert(*((i->second).begin()));
-		}
-	}
-	OptimizeMapping(results, dmap);
-}
 
 typedef std::set<SIGNATURE> SIGSET;
+bool FirstAdjust(SIGNATUREMAP &results, SIDMAP &dmap, std::map<unsigned int, SIGSET> &mapHashSigSet)
+{
+	bool flag = false;
+	for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
+	{
+		unsigned int iHashValue = Hash((SIGNATURE)i->first);
+		SIGSET &iset = mapHashSigSet[iHashValue];
+		size_t count = iset.size();
+		if (i->second.size() == 1 && count >= 2)
+		{
+			for (std::set<SNORTID>::iterator j = i->second.begin(); j != i->second.end();)
+			{
+				std::set<SIGNATURE>::iterator k = dmap[*j].begin();
+				for (; k != dmap[*j].end(); ++k)
+				{
+					unsigned int kHashValue = Hash((SIGNATURE)(*k));
+					SIGSET &kset = mapHashSigSet[kHashValue];
+					if (results[*k].size() == 0 && kset.size() + 1 < count)
+					{
+						kset.insert(*k);
+						iset.erase(i->first);
+						results[*k].insert(*j);
+						flag = true;
+						break;
+					}
+				}
+				if (k == dmap[*j].end())
+				{
+					break;
+				}
+				else
+				{
+					j = i->second.erase(j);
+				}
+			}
+		}
+	}
+
+	return flag;
+}
+
 struct AdjustPath
 {
 	SIGNATURE parent;
 	SIGNATURE self;
 	size_t level;
 };
-bool myFindAdjust(std::map<unsigned int, SIGSET> &mapHashSigSet, SIDMAP &sidMap, SIGNATUREMAP &results, std::vector<SIGNATURE> &SigSet, size_t nDepth, std::vector<AdjustPath> &vecPath, size_t count);
-
-void Adjust(SIGNATUREMAP &results, SIDMAP &dmap)
-{
-	std::map<unsigned int, SIGSET> mapHashSigSet;
-	for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
-	{
-		if (i->second.size() >= 1)
-		{
-			mapHashSigSet[Hash((SIGNATURE)i->first)].insert(i->first);
-		}
-	}
-	int count = 0;
-	bool flag = true;
-	while (flag)
-	{
-		++count;
-		std::cout << "First Adjust: " << count << std::endl;
-		flag = false;
-		for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
-		{
-			unsigned int iHashValue = Hash((SIGNATURE)i->first);
-			SIGSET &iset = mapHashSigSet[iHashValue];
-			size_t count = iset.size();
-			if (i->second.size() == 1 && count >= 2)
-			{
-				for (std::set<SNORTID>::iterator j = i->second.begin(); j != i->second.end();)
-				{
-					std::set<SIGNATURE>::iterator k = dmap[*j].begin();
-					for (; k != dmap[*j].end(); ++k)
-					{
-						unsigned int kHashValue = Hash((SIGNATURE)(*k));
-						SIGSET &kset = mapHashSigSet[kHashValue];
-						if (results[*k].size() == 0 && kset.size() + 1 < count)
-						{
-							kset.insert(*k);
-							iset.erase(i->first);
-							results[*k].insert(*j);
-							flag = true;
-							break;
-						}
-					}
-					if (k == dmap[*j].end())
-					{
-						break;
-					}
-					else
-					{
-						j = i->second.erase(j);
-					}
-				}
-			}
-		}
-	}
-	count = 0;
-	flag = true;
-	while (flag)
-	{
-		++count;
-		std::cout << "Second Adjust: " << count << std::endl;
-		flag = false;
-		for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
-		{
-			unsigned int iHashValue = Hash((SIGNATURE)i->first);
-			SIGSET &iset = mapHashSigSet[iHashValue];
-			size_t count = iset.size();
-			if (i->second.size() == 1 && count >= 2)
-			{
-				std::vector<SIGNATURE> Sigs;
-				std::vector<AdjustPath> vecPath;
-				SIGNATURE oneSig;
-				oneSig = i->first;
-				Sigs.push_back(oneSig);
-				if (myFindAdjust(mapHashSigSet, dmap, results, Sigs, 1, vecPath, count))
-				{
-					flag = true;
-					AdjustPath onePoint;
-					onePoint.parent = vecPath[vecPath.size() - 1].parent;
-					onePoint.self = vecPath[vecPath.size() - 1].self;
-					onePoint.level = vecPath[vecPath.size() - 1].level;
-					SNORTID oneSid;
-					while (onePoint.level != 0)
-					{
-						oneSid = *(results[onePoint.parent].begin());
-						results[onePoint.self].insert(oneSid);
-						results[onePoint.parent].erase(oneSid);
-						for (std::vector<AdjustPath>::iterator j = vecPath.begin(); j != vecPath.end(); ++j)
-						{
-							if (j->level + 1 == onePoint.level && j->self == onePoint.parent)
-							{
-								onePoint.parent = j->parent;
-								onePoint.self = j->self;
-								onePoint.level = j->level;
-								break;
-							}
-						}
-					}
-					oneSid = *(results[onePoint.parent].begin());
-					results[onePoint.self].insert(oneSid);
-					results[onePoint.parent].erase(oneSid);
-				}
-				vecPath.clear();
-			}
-		}
-	}
-}
 
 bool myFindAdjust(std::map<unsigned int, SIGSET> &mapHashSigSet, SIDMAP &sidMap, SIGNATUREMAP &results, std::vector<SIGNATURE> &Sigs, size_t nDepth, std::vector<AdjustPath> &vecPath, size_t count)
 {
@@ -304,57 +202,121 @@ bool myFindAdjust(std::map<unsigned int, SIGSET> &mapHashSigSet, SIDMAP &sidMap,
 	return myFindAdjust(mapHashSigSet, sidMap, results, nextSigs, nDepth + 1, vecPath, count);
 }
 
-//void Adjust(SIGNATUREMAP &results, SIDMAP &dmap)
-//{
-//	std::set<unsigned int> tmp;
-//	std::set<SIGNATURE>::iterator k;
-//	bool flag = true;
-//	for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
-//	{
-//		if (i->second.size() > 1)
-//		{
-//			tmp.insert(Hash((unsigned int)i->first));
-//		}
-//	}
-//	while (flag)
-//	{
-//		flag = false;
-//		for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
-//		{
-//			if (i->second.size() == 1)
-//			{
-//				if (tmp.count(Hash((unsigned int)i->first)))
-//				{
-//					for (std::set<SNORTID>::iterator j = i->second.begin(); j != i->second.end();)
-//					{
-//						for (k = dmap[*j].begin(); k != dmap[*j].end(); ++k)
-//						{
-//							if (!tmp.count(Hash((unsigned int)(*k))) && results[*k].size() == 0)
-//							{
-//								tmp.insert(Hash((unsigned int)(*k)));
-//								results[*k].insert(*j);
-//								flag = true;
-//								break;
-//							}
-//						}
-//						if (k == dmap[*j].end())
-//						{
-//							break;
-//						}
-//						else
-//						{
-//							j = i->second.erase(j);
-//						}
-//					}
-//				}
-//				else
-//				{
-//					tmp.insert(Hash((unsigned int)i->first));
-//				}
-//			}
-//		}
-//	}
-//}
+bool SecondAdjust(SIGNATUREMAP &results, SIDMAP &dmap, std::map<unsigned int, SIGSET> &mapHashSigSet)
+{
+	bool flag = false;
+	for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
+	{
+		unsigned int iHashValue = Hash((SIGNATURE)i->first);
+		SIGSET &iset = mapHashSigSet[iHashValue];
+		size_t count = iset.size();
+		if (i->second.size() == 1 && count >= 2)
+		{
+			std::vector<SIGNATURE> Sigs;
+			std::vector<AdjustPath> vecPath;
+			SIGNATURE oneSig;
+			oneSig = i->first;
+			Sigs.push_back(oneSig);
+			if (myFindAdjust(mapHashSigSet, dmap, results, Sigs, 1, vecPath, count))
+			{
+				flag = true;
+				AdjustPath onePoint;
+				onePoint.parent = vecPath[vecPath.size() - 1].parent;
+				onePoint.self = vecPath[vecPath.size() - 1].self;
+				onePoint.level = vecPath[vecPath.size() - 1].level;
+				SNORTID oneSid;
+				while (onePoint.level != 0)
+				{
+					oneSid = *(results[onePoint.parent].begin());
+					results[onePoint.self].insert(oneSid);
+					results[onePoint.parent].erase(oneSid);
+					for (std::vector<AdjustPath>::iterator j = vecPath.begin(); j != vecPath.end(); ++j)
+					{
+						if (j->level + 1 == onePoint.level && j->self == onePoint.parent)
+						{
+							onePoint.parent = j->parent;
+							onePoint.self = j->self;
+							onePoint.level = j->level;
+							break;
+						}
+					}
+				}
+				oneSid = *(results[onePoint.parent].begin());
+				results[onePoint.self].insert(oneSid);
+				results[onePoint.parent].erase(oneSid);
+			}
+			vecPath.clear();
+		}
+	}
+
+	return flag;
+}
+
+void Adjust(SIGNATUREMAP &results, SIDMAP &dmap)
+{
+	std::map<unsigned int, SIGSET> mapHashSigSet;
+	for (SIGNATUREMAP::iterator i = results.begin(); i != results.end(); ++i)
+	{
+		if (i->second.size() >= 1)
+		{
+			mapHashSigSet[Hash((SIGNATURE)i->first)].insert(i->first);
+		}
+	}
+	int count = 0;
+	bool flag = true;
+	while (flag)
+	{
+		++count;
+		std::cout << "First Adjust: " << count << std::endl;
+		flag = FirstAdjust(results, dmap, mapHashSigSet);
+	}
+	count = 0;
+	flag = true;
+	while (flag)
+	{
+		++count;
+		std::cout << "Second Adjust: " << count << std::endl;
+		flag = SecondAdjust(results, dmap, mapHashSigSet);
+	}
+}
+
+bool FirstOptimize(SIGNATUREMAP &results, SIDMAP &dmap)
+{
+	size_t min;
+	SIGNATURE sig;
+	size_t original_num;
+	SIGNATURE original_sig;
+	bool flag = false;
+	for (SIDMAP::iterator i = dmap.begin(); i != dmap.end(); ++i)
+	{
+		min = dmap.size() + 1;
+		original_num = dmap.size() + 1;
+		for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
+		{
+			if (min > results[(*j)].size())
+			{
+				min = results[(*j)].size();
+				sig = (*j);
+			}
+			if (results[(*j)].count(i->first))
+			{
+				original_num = results[(*j)].size();
+				original_sig = (*j);
+			}
+		}
+		if (original_num >= 2 && min + 1 < original_num)
+		{
+			if (original_num != dmap.size() + 1)
+			{
+				results[original_sig].erase(i->first);
+			}
+			results[sig].insert(i->first);
+			flag = true;
+		}
+	}
+	return flag;
+}
+
 struct OptimizePath
 {
 	SIGNATURE original_Sig;
@@ -362,122 +324,6 @@ struct OptimizePath
 	SIGNATURE current_Sig;
 	size_t level;
 };
-bool myFindOptimize(SIGNATUREMAP &results, SIDMAP &dmap, std::vector<SIGNATURE> Sids, size_t count, std::vector<OptimizePath> &vecPath, size_t nDepth);
-
-void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap)
-{
-	size_t min;
-	SIGNATURE sig;
-	size_t original_num;
-	SIGNATURE original_sig;
-	bool flag = true;
-	int count = 0;
-	while(flag)
-	{
-		++count;
-		std::cout << "First Optimize: " << count << std::endl;
-		flag = false;
-		for (SIDMAP::iterator i = dmap.begin(); i != dmap.end(); ++i)
-		{
-			min = dmap.size() + 1;
-			original_num = dmap.size() + 1;
-			for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
-			{
-				if (min > results[(*j)].size())
-				{
-					min = results[(*j)].size();
-					sig = (*j);
-				}
-				if (results[(*j)].count(i->first))
-				{
-					original_num = results[(*j)].size();
-					original_sig = (*j);
-				}
-			}
-			if (original_num >= 2 && min + 1 < original_num)
-			{
-				if (original_num != dmap.size() + 1)
-				{
-					results[original_sig].erase(i->first);
-				}
-				results[sig].insert(i->first);
-				flag = true;
-				//break;
-			}
-		}
-	}
-	flag = true;
-	count = 0;
-	while (flag)
-	{
-		++count;
-		std::cout << "Second Optimize: " << count << std::endl;
-		flag = false;
-		for (SIDMAP::iterator i = dmap.begin(); i != dmap.end(); ++i)
-		{
-			min = dmap.size() + 1;
-			original_num = dmap.size() + 1;
-			for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
-			{
-				if (min > results[(*j)].size())
-				{
-					min = results[(*j)].size();
-					sig = (*j);
-				}
-				if (results[(*j)].count(i->first))
-				{
-					original_num = results[(*j)].size();
-					original_sig = (*j);
-				}
-			}
-			if (original_num >= 2 && min + 1 == original_num)
-			{
-				std::vector<SIGNATURE> Sigs;
-				std::vector<OptimizePath> vecPath;
-				OptimizePath onePoint;
-				onePoint.level = 0;
-				onePoint.Sid = i->first;
-				onePoint.original_Sig = original_sig;
-				for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
-				{
-					if (min == results[*j].size())
-					{
-						onePoint.current_Sig = *j;
-						vecPath.push_back(onePoint);
-						Sigs.push_back(*j);
-					}
-				}
-				if (myFindOptimize(results, dmap, Sigs, min, vecPath, 1))
-				{
-					flag = true;
-					OptimizePath onePoint;
-					onePoint.original_Sig = vecPath[vecPath.size() - 1].original_Sig;
-					onePoint.Sid = vecPath[vecPath.size() - 1].Sid;
-					onePoint.current_Sig = vecPath[vecPath.size() - 1].current_Sig;
-					onePoint.level = vecPath[vecPath.size() - 1].level;
-					while (onePoint.level != 0)
-					{
-						results[onePoint.original_Sig].erase(onePoint.Sid);
-						results[onePoint.current_Sig].insert(onePoint.Sid);
-						for (std::vector<OptimizePath>::iterator j = vecPath.begin(); j != vecPath.end(); ++j)
-						{
-							if (j->level + 1 == onePoint.level && j->current_Sig == onePoint.original_Sig)
-							{
-								onePoint.original_Sig = j->original_Sig;
-								onePoint.Sid = j->Sid;
-								onePoint.current_Sig = j->current_Sig;
-								onePoint.level = j->level;
-								break;
-							}
-						}
-					}
-					results[onePoint.original_Sig].erase(onePoint.Sid);
-					results[onePoint.current_Sig].insert(onePoint.Sid);
-				}
-			}
-		}
-	}
-}
 
 bool myFindOptimize(SIGNATUREMAP &results, SIDMAP &dmap, std::vector<SIGNATURE> Sigs, size_t count, std::vector<OptimizePath> &vecPath, size_t nDepth)
 {
@@ -525,91 +371,121 @@ bool myFindOptimize(SIGNATUREMAP &results, SIDMAP &dmap, std::vector<SIGNATURE> 
 	return myFindOptimize(results, dmap, nextSigs, count, vecPath, nDepth + 1);
 }
 
-//void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap)
-//{
-//	size_t min;
-//	SIGNATURE sig;
-//	size_t original_num;
-//	SIGNATURE original_sig;
-//	bool flag = true;
-//	int count = 0;
-//	size_t second_min;
-//	SIGNATURE second_sig;
-//	SIGNATURE third_sig;
-//	SNORTID Sid;
-//	bool change;
-//	while(flag)
-//	{
-//		++count;
-//		std::cout << count << std::endl;
-//		flag = false;
-//		for (SIDMAP::iterator i = dmap.begin(); i != dmap.end(); ++i)
-//		{
-//			min = dmap.size() + 1;
-//			original_num = dmap.size() + 1;
-//			for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
-//			{
-//				if (min > results[(*j)].size())
-//				{
-//					min = results[(*j)].size();
-//					sig = (*j);
-//				}
-//				if (results[(*j)].count(i->first))
-//				{
-//					original_num = results[(*j)].size();
-//					original_sig = (*j);
-//				}
-//			}
-//			if (original_num >= 2 && min + 1 < original_num)
-//			{
-//				if (original_num != dmap.size() + 1)
-//				{
-//					results[original_sig].erase(i->first);
-//				}
-//				results[sig].insert(i->first);
-//				flag = true;
-//				//break;
-//			}
-//			else if (original_num >= 2 && min + 1 == original_num)
-//			{
-//				second_min = min;
-//				change = false;
-//				for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
-//				{
-//					if (min == results[*j].size())
-//					{
-//						for (std::set<SNORTID>::iterator k = results[*j].begin(); k != results[*j].end(); ++k)
-//						{
-//							for (std::set<SIGNATURE>::iterator l = dmap[*k].begin(); l != dmap[*k].end(); ++l)
-//							{
-//								if (results[*l].size() < second_min)
-//								{
-//									second_min = results[*l].size();
-//									second_sig = *j;
-//									third_sig = *l;
-//									Sid = *k;
-//									change = true;
-//								}
-//							}
-//						}
-//					}
-//				}
-//				if (change)
-//				{
-//					results[sig].insert(i->first);
-//					results[original_sig].erase(i->first);
-//					results[second_sig].erase(Sid);
-//					results[third_sig].insert(Sid);
-//					flag = true;
-//				}
-//			}
-//			else
-//			{
-//				continue;
-//			}
-//		}
-//	}
-//}
+bool SecondOptimize(SIGNATUREMAP &results, SIDMAP &dmap)
+{
+	size_t min;
+	SIGNATURE sig;
+	size_t original_num;
+	SIGNATURE original_sig;
+	bool flag = false;
+	for (SIDMAP::iterator i = dmap.begin(); i != dmap.end(); ++i)
+	{
+		min = dmap.size() + 1;
+		original_num = dmap.size() + 1;
+		for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
+		{
+			if (min > results[(*j)].size())
+			{
+				min = results[(*j)].size();
+				sig = (*j);
+			}
+			if (results[(*j)].count(i->first))
+			{
+				original_num = results[(*j)].size();
+				original_sig = (*j);
+			}
+		}
+		if (original_num >= 2 && min + 1 == original_num)
+		{
+			std::vector<SIGNATURE> Sigs;
+			std::vector<OptimizePath> vecPath;
+			OptimizePath onePoint;
+			onePoint.level = 0;
+			onePoint.Sid = i->first;
+			onePoint.original_Sig = original_sig;
+			for (std::set<SIGNATURE>::iterator j = (i->second).begin(); j != (i->second).end(); ++j)
+			{
+				if (min == results[*j].size())
+				{
+					onePoint.current_Sig = *j;
+					vecPath.push_back(onePoint);
+					Sigs.push_back(*j);
+				}
+			}
+			if (myFindOptimize(results, dmap, Sigs, min, vecPath, 1))
+			{
+				flag = true;
+				OptimizePath onePoint;
+				onePoint.original_Sig = vecPath[vecPath.size() - 1].original_Sig;
+				onePoint.Sid = vecPath[vecPath.size() - 1].Sid;
+				onePoint.current_Sig = vecPath[vecPath.size() - 1].current_Sig;
+				onePoint.level = vecPath[vecPath.size() - 1].level;
+				while (onePoint.level != 0)
+				{
+					results[onePoint.original_Sig].erase(onePoint.Sid);
+					results[onePoint.current_Sig].insert(onePoint.Sid);
+					for (std::vector<OptimizePath>::iterator j = vecPath.begin(); j != vecPath.end(); ++j)
+					{
+						if (j->level + 1 == onePoint.level && j->current_Sig == onePoint.original_Sig)
+						{
+							onePoint.original_Sig = j->original_Sig;
+							onePoint.Sid = j->Sid;
+							onePoint.current_Sig = j->current_Sig;
+							onePoint.level = j->level;
+							break;
+						}
+					}
+				}
+				results[onePoint.original_Sig].erase(onePoint.Sid);
+				results[onePoint.current_Sig].insert(onePoint.Sid);
+			}
+		}
+	}
+
+	return flag;
+}
+
+void OptimizeMapping(SIGNATUREMAP &results, SIDMAP &dmap)
+{
+	bool flag = true;
+	int count = 0;
+	while(flag)
+	{
+		++count;
+		std::cout << "First Optimize: " << count << std::endl;
+		flag = FirstOptimize(results, dmap);
+	}
+	flag = true;
+	count = 0;
+	while (flag)
+	{
+		++count;
+		std::cout << "Second Optimize: " << count << std::endl;
+		flag = SecondOptimize(results, dmap);
+	}
+}
+
+void Optimize(SIGNATUREMAP &gmap, SIGNATUREMAP &results, SIDMAP &dmap)
+{
+	std::set<SNORTID> Sids;
+	for (SIDMAP::iterator i = dmap.begin(); i != dmap.end(); ++i)
+	{
+		if ((i->second).size() == 1)
+		{
+			results[*((i->second).begin())].insert(i->first);
+			Sids.insert(i->first);
+		}
+	}
+	for (SIGNATUREMAP::iterator i = gmap.begin(); i != gmap.end(); ++i)
+	{
+		if ((i->second).size() == 1 && !Sids.count(*(i->second.begin())))
+		{
+			results[i->first].insert(*((i->second).begin()));
+			Sids.insert(*((i->second).begin()));
+		}
+	}
+	OptimizeMapping(results, dmap);
+}
 
 void ReadRules(std::vector<std::string> &rules)
 {
